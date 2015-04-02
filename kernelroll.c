@@ -21,6 +21,7 @@
 #include <linux/init.h> 
 #include <asm/unistd.h> 
 #include <linux/syscalls.h>
+#include <linux/delay.h>
 #include <asm/amd_nb.h>
 #include <linux/highuid.h>
 
@@ -32,7 +33,7 @@ MODULE_AUTHOR("Franz Pletz");
 MODULE_DESCRIPTION("for teh lulz!");
 
 char *rollfile;
-void **sys_call_table = (void **)0xffffffff81400300; /* TODO: change */
+void **sys_call_table;
 
 module_param(rollfile, charp, 0000);
 MODULE_PARM_DESC(rollfile, "music trolling file");
@@ -41,24 +42,22 @@ module_param(sys_call_table, ulong, 0000);
 MODULE_PARM_DESC(sys_call_table, "address of the system call table");
 
 /* currently not working try for finding the sys_call_table ourselves */
-unsigned long **find_sys_call_table(void) 
-{
-    unsigned long **sctable;
+unsigned long **find_sys_call_table() {
     unsigned long ptr;
+    unsigned long *p;
 
-    sctable = NULL;
-    for (ptr = (unsigned long)&amd_nb_misc_ids;
-            ptr < (unsigned long)&overflowgid; 
-            ptr += sizeof(void *))
-    {
-        unsigned long *p;
+    for (ptr = (unsigned long)sys_close;
+         ptr < (unsigned long)&loops_per_jiffy;
+         ptr += sizeof(void *)) {
+             
         p = (unsigned long *)ptr;
-        if(p[__NR_close] == (unsigned long) sys_close)
-        {
-            sctable = (unsigned long **)p;
-            return &sctable[0];
+
+        if (p[__NR_close] == (unsigned long)sys_close) {
+            printk(KERN_DEBUG "Found the sys_call_table!!!\n");
+            return (unsigned long **)p;
         }
     }
+    
     return NULL;
 }
 
@@ -109,7 +108,7 @@ void set_addr_ro(unsigned long addr) {
 
 static int __init init_rickroll(void) 
 {
-    //sys_call_table = find_sys_call_table();
+    sys_call_table = find_sys_call_table();
     if(sys_call_table == NULL)
     {
         printk(KERN_ERR "Cannot find the system call address\n"); 
