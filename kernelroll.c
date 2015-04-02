@@ -77,7 +77,7 @@ asmlinkage long my_open(const char __user *path, int oflag, mode_t mode)
         kfree(buf);
     } else {
         r = o_open(path, oflag, mode);
-        printk(KERN_DEBUG "file %s has been opened with mode %d\n", path, mode);
+        //printk(KERN_DEBUG "file %s has been opened with mode %d\n", path, mode);
     }
 
 
