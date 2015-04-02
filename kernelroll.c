@@ -38,11 +38,7 @@ void **sys_call_table;
 module_param(rollfile, charp, 0000);
 MODULE_PARM_DESC(rollfile, "music trolling file");
 
-module_param(sys_call_table, ulong, 0000);
-MODULE_PARM_DESC(sys_call_table, "address of the system call table");
-
-/* currently not working try for finding the sys_call_table ourselves */
-unsigned long **find_sys_call_table() {
+unsigned long **find_sys_call_table(void) {
     unsigned long ptr;
     unsigned long *p;
 
@@ -62,12 +58,12 @@ unsigned long **find_sys_call_table() {
 }
 
 
-asmlinkage int (*o_open)(const char *path, int oflag, mode_t mode); 
-asmlinkage int my_open(const char *path, int oflag, mode_t mode) 
+asmlinkage long (*o_open)(const char __user *path, int oflag, mode_t mode); 
+asmlinkage long my_open(const char __user *path, int oflag, mode_t mode) 
 {
     int len = strlen(rollfile) + 1;
     char* p;
-    int r;
+    long r;
 
     p = (char *)(path + strlen(path) - 4);
 
@@ -81,6 +77,7 @@ asmlinkage int my_open(const char *path, int oflag, mode_t mode)
         kfree(buf);
     } else {
         r = o_open(path, oflag, mode);
+        printk(KERN_DEBUG "file %s has been opened with mode %d\n", path, mode);
     }
 
 
@@ -108,8 +105,8 @@ void set_addr_ro(unsigned long addr) {
 
 static int __init init_rickroll(void) 
 {
-    sys_call_table = find_sys_call_table();
-    if(sys_call_table == NULL)
+    sys_call_table = (void **)find_sys_call_table();
+    if(!sys_call_table)
     {
         printk(KERN_ERR "Cannot find the system call address\n"); 
         return -1;  /* do not load */
@@ -120,14 +117,16 @@ static int __init init_rickroll(void)
     set_addr_rw((unsigned long)sys_call_table);
     GPF_DISABLE;
 
-    o_open = (int(*)(const char *, int, mode_t))(sys_call_table[__NR_open]); 
+    o_open = (long(*)(const char *, int, mode_t))(sys_call_table[__NR_open]); 
     sys_call_table[__NR_open] = (void *) my_open; 
+    GPF_ENABLE;
 
     return 0; 
 } 
 
 static void __exit exit_rickroll(void) 
 { 
+    GPF_DISABLE;
     sys_call_table[__NR_open] = (void *) o_open; 
 
     set_addr_ro((unsigned long)sys_call_table);
